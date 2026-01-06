@@ -121,56 +121,25 @@ backend/
 # Core Backend Services — Implementation Guide (Beginner Friendly)
 
 You asked for the “core business logic” to be implemented in `services/`.
-This section explains exactly what to write there, step-by-step, with diagrams and copy/paste JS skeletons.
+This is the condensed, non-repetitive version (see the Team Execution Plan at the end for exact per-dev steps + file lists).
 
-IMPORTANT:
-- This README describes the logic; it does NOT auto-create those service files.
-- Controllers stay thin (already done): controllers call services and return JSON.
-- Services contain ALL workflow logic and DB reads/writes.
-- Models are dumb schemas (already done).
+Non-negotiables:
+- Routes define URLs → controllers stay thin → services do the work (DB/queues/external APIs).
+- AI produces JSON; humans approve; backend executes.
+- Meetings must obey the state machine; no random state jumps.
 
--------------------------------------------------------------------------------
-
-## S1. Golden Rule: Route → Controller → Service
-
-Mental model:
-- Route defines URL + method.
-- Controller reads `req` and calls a service.
-- Service does the work (DB, queues, external APIs).
-
-Diagram:
+### Architecture (mental model)
 ```mermaid
 flowchart LR
   R[Route] --> C[Controller]
   C --> S[Service]
-  S --> M[(MongoDB via Mongoose Models)]
-  S --> Q[Queues / Jobs]
-  S --> X[External APIs]
+  S --> M[(MongoDB via Mongoose)]
+  S --> Q[Queues (BullMQ)]
+  S --> X[External APIs (mock ok)]
 ```
 
-Controller pattern (already used in this repo):
-```js
-// controllers are thin
-exports.someHandler = async (req, res, next) => {
-  try {
-    const result = await someService.someMethod(req.body, req.params, req.query);
-    return res.json(result);
-  } catch (err) {
-    return next(err);
-  }
-};
-```
-
--------------------------------------------------------------------------------
-
-## S2. Meeting Status State Machine (Core Business Rule)
-
-Meetings move through states. Do NOT allow random jumps.
-
-Allowed statuses (from README):
-`UPLOADED → PROCESSING → REVIEW → APPROVED → SYNCED` (or `FAILED` at any point)
-
-Diagram:
+### Meeting status state machine (enforce this)
+Allowed: `UPLOADED → PROCESSING → REVIEW → APPROVED → SYNCED` (or `FAILED`)
 ```mermaid
 stateDiagram-v2
   [*] --> UPLOADED
@@ -184,59 +153,31 @@ stateDiagram-v2
   APPROVED --> FAILED
 ```
 
-Simple rule examples:
-- `/meetings/:id/start` can only run if meeting.status is `UPLOADED`.
-- `/ai/process/:meetingId` should set status to `PROCESSING` before work.
-- After AI output is saved, set status to `REVIEW`.
-- `/review/:meetingId/approve` sets status to `APPROVED`.
-- `/sync/...` should only run if status is `APPROVED`.
+### Services to implement (controllers already call these)
+- Auth: `src/services/auth.service.js` (signup/login)
+- Workspace: `src/services/workspace.service.js` (get workspace + invite)
+- Invites: `src/services/invite.service.js` + `src/services/email.service.js` (send/validate/accept)
+- Meetings: `src/services/meeting.service.js` (upload/start/get)
+- AI Orchestrator: `src/services/ai.service.js` (runs steps, saves `AiOutput`, moves to REVIEW)
+- Review Gate: `src/services/review.service.js` (get/approve/refine-diff-only)
+- Sync Executors: `src/services/jira.service.js`, `src/services/calendar.service.js` (only if APPROVED)
+- Docs Bot: `src/services/docs.service.js` (static docs Q&A only)
 
--------------------------------------------------------------------------------
-
-## S3. The Services You Should Implement
-
-These are the “core business logic” files.
-
-Recommended service files (minimum):
-- `src/services/auth.service.js`
-- `src/services/workspace.service.js`
-- `src/services/invite.service.js`
-- `src/services/meeting.service.js`
-- `src/services/ai.service.js` (or use queue to run AI)
-- `src/services/review.service.js`
-- `src/services/jira.service.js`
-- `src/services/calendar.service.js`
-- `src/services/email.service.js`
-- `src/services/docs.service.js`
-
-Plus the per-step AI services already listed:
+Per-step AI services (one model per step):
 - `src/services/ai/transcription.service.js`
 - `src/services/ai/summarization.service.js`
 - `src/services/ai/decision.service.js`
 - `src/services/ai/actionItem.service.js`
 - `src/services/ai/confidence.service.js`
 
-Why this matters:
-- Each file does ONE category of work.
-- Your controllers already require these modules.
-
--------------------------------------------------------------------------------
-
-## S4. Shared Helpers (You Can Copy These)
-
-### S4.1 A tiny “assert” helper
+### Tiny shared helpers (copy/paste)
 ```js
-function assert(condition, message) {
-  if (!condition) {
-    const err = new Error(message);
-    err.statusCode = 400;
-    throw err;
-  }
+function httpError(statusCode, message) {
+  const err = new Error(message);
+  err.statusCode = statusCode;
+  return err;
 }
-```
 
-### S4.2 A safe meeting status transition helper
-```js
 const allowedTransitions = {
   UPLOADED: ["PROCESSING", "FAILED"],
   PROCESSING: ["REVIEW", "FAILED"],
@@ -251,467 +192,8 @@ function canTransition(from, to) {
 }
 ```
 
--------------------------------------------------------------------------------
-
-## S5. Auth Service (Minimal UI-Auth for Hackathon)
-
-Routes:
-- `POST /auth/login`
-- `POST /auth/signup`
-
-What the service should do (beginner steps):
-1) Read email/name.
-2) For signup: create a User.
-3) For login: find user by email.
-4) Return a simple JSON session payload.
-
-Service skeleton:
-```js
-// src/services/auth.service.js
-const User = require("../models/User");
-
-exports.signup = async (body) => {
-  // 1) validate input (minimal)
-  // 2) create user
-  // 3) return { user }
-  const user = await User.create({
-    email: body.email,
-    name: body.name,
-    role: body.role || "MEMBER",
-  });
-  return { user };
-};
-
-exports.login = async (body) => {
-  const user = await User.findOne({ email: body.email });
-  // For hackathon: if not found, throw a 401
-  if (!user) {
-    const err = new Error("Invalid credentials");
-    err.statusCode = 401;
-    throw err;
-  }
-  return { user };
-};
-```
-
--------------------------------------------------------------------------------
-
-## S6. Workspace Service
-
-Routes:
-- `GET /workspace`
-- `POST /workspace/invite`
-
-Beginner logic:
-1) Determine “current user” (later via auth middleware; for now can be a placeholder).
-2) `GET /workspace`: return the workspace(s) user belongs to.
-3) `POST /workspace/invite`: delegate to Invite service.
-
-Service skeleton:
-```js
-// src/services/workspace.service.js
-const Workspace = require("../models/Workspace");
-const inviteService = require("./invite.service");
-
-exports.getWorkspace = async (req) => {
-  // For hackathon, you might pass userId via header or req.user
-  const userId = req.user?.id;
-  if (!userId) {
-    const err = new Error("Missing user context");
-    err.statusCode = 401;
-    throw err;
-  }
-
-  const workspaces = await Workspace.find({ "members.userId": userId });
-  return { workspaces };
-};
-
-exports.invite = async (body) => {
-  return inviteService.send(body);
-};
-```
-
--------------------------------------------------------------------------------
-
-## S7. Invite Service
-
-Routes:
-- `POST /invites/send`
-- `GET /invites/validate`
-- `POST /invites/accept`
-
-Beginner logic (clean and simple):
-1) `send`: create an Invite document with a random token and expiry.
-2) `validate`: check token exists and not expired and not accepted.
-3) `accept`: mark acceptedAt, add user to workspace members.
-
-Sequence diagram:
-```mermaid
-sequenceDiagram
-  autonumber
-  participant API
-  participant DB
-  participant Email
-
-  API->>DB: Create Invite(workspaceId,email,role,token,expiresAt)
-  API->>Email: Send email with invite link
-  API-->>API: return { ok: true }
-```
-
-Service skeleton:
-```js
-// src/services/invite.service.js
-const crypto = require("crypto");
-const Invite = require("../models/Invite");
-const Workspace = require("../models/Workspace");
-const User = require("../models/User");
-const emailService = require("./email.service");
-
-exports.send = async (body) => {
-  const token = crypto.randomBytes(24).toString("hex");
-  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24); // 24h
-
-  const invite = await Invite.create({
-    workspaceId: body.workspaceId,
-    email: body.email,
-    role: body.role,
-    token,
-    expiresAt,
-  });
-
-  await emailService.sendInvite({ to: invite.email, token });
-  return { inviteId: invite._id, token };
-};
-
-exports.validate = async (query) => {
-  const invite = await Invite.findOne({ token: query.token });
-  if (!invite) {
-    const err = new Error("Invalid token");
-    err.statusCode = 400;
-    throw err;
-  }
-  if (invite.acceptedAt) {
-    const err = new Error("Invite already accepted");
-    err.statusCode = 400;
-    throw err;
-  }
-  if (invite.expiresAt < new Date()) {
-    const err = new Error("Invite expired");
-    err.statusCode = 400;
-    throw err;
-  }
-  return { ok: true, workspaceId: invite.workspaceId, email: invite.email, role: invite.role };
-};
-
-exports.accept = async (body) => {
-  const invite = await Invite.findOne({ token: body.token });
-  if (!invite) {
-    const err = new Error("Invalid token");
-    err.statusCode = 400;
-    throw err;
-  }
-
-  // Find or create user (hackathon-friendly)
-  let user = await User.findOne({ email: invite.email });
-  if (!user) {
-    user = await User.create({ email: invite.email, name: body.name, role: "MEMBER" });
-  }
-
-  await Workspace.updateOne(
-    { _id: invite.workspaceId },
-    { $addToSet: { members: { userId: user._id, role: invite.role } } }
-  );
-
-  invite.acceptedAt = new Date();
-  await invite.save();
-
-  return { ok: true, workspaceId: invite.workspaceId, userId: user._id };
-};
-```
-
--------------------------------------------------------------------------------
-
-## S8. Meeting Service
-
-Routes:
-- `POST /meetings/upload`
-- `POST /meetings/:id/start`
-- `GET /meetings/:id`
-
-Business logic:
-1) Upload creates a Meeting with status `UPLOADED`.
-2) Start transitions `UPLOADED → PROCESSING` and triggers AI pipeline (direct call or queue).
-3) Get returns meeting + latest AI output version (optional).
-
-Service skeleton:
-```js
-// src/services/meeting.service.js
-const Meeting = require("../models/Meeting");
-const aiService = require("./ai.service");
-
-exports.upload = async (body) => {
-  const meeting = await Meeting.create({
-    workspaceId: body.workspaceId,
-    createdBy: body.createdBy,
-    title: body.title,
-    duration: body.duration,
-    participants: body.participants || [],
-    sourceType: body.sourceType,
-    sourceUrl: body.sourceUrl,
-    status: "UPLOADED",
-  });
-  return { meeting };
-};
-
-exports.start = async (meetingId) => {
-  const meeting = await Meeting.findById(meetingId);
-  if (!meeting) {
-    const err = new Error("Meeting not found");
-    err.statusCode = 404;
-    throw err;
-  }
-  if (meeting.status !== "UPLOADED") {
-    const err = new Error("Meeting cannot be started from current status");
-    err.statusCode = 400;
-    throw err;
-  }
-
-  meeting.status = "PROCESSING";
-  await meeting.save();
-
-  // Option A: run immediately
-  // Option B: enqueue job
-  const result = await aiService.process(meetingId);
-  return { ok: true, ...result };
-};
-
-exports.getById = async (meetingId) => {
-  const meeting = await Meeting.findById(meetingId);
-  if (!meeting) {
-    const err = new Error("Meeting not found");
-    err.statusCode = 404;
-    throw err;
-  }
-  return { meeting };
-};
-```
-
--------------------------------------------------------------------------------
-
-## S9. AI Service (Orchestrator)
-
-Routes:
-- `POST /ai/process/:meetingId`
-- `GET /ai/output/:meetingId`
-
-Core job:
-- Call transcription if needed.
-- Call summarization, decisions, action items, confidence.
-- Save `AiOutput` with an incrementing version.
-- Update meeting status to `REVIEW`.
-
-Orchestrator skeleton:
-```js
-// src/services/ai.service.js
-const Meeting = require("../models/Meeting");
-const AiOutput = require("../models/AiOutput");
-
-const transcription = require("./ai/transcription.service");
-const summarization = require("./ai/summarization.service");
-const decision = require("./ai/decision.service");
-const actionItem = require("./ai/actionItem.service");
-const confidence = require("./ai/confidence.service");
-
-exports.process = async (meetingId) => {
-  const meeting = await Meeting.findById(meetingId);
-  if (!meeting) {
-    const err = new Error("Meeting not found");
-    err.statusCode = 404;
-    throw err;
-  }
-
-  // 1) get transcriptText
-  let transcriptText = "";
-  if (meeting.sourceType === "AUDIO") {
-    const t = await transcription.transcribe({ sourceUrl: meeting.sourceUrl });
-    transcriptText = t.transcriptText;
-  } else {
-    // For hackathon: meeting.sourceUrl could be a pasted transcript
-    transcriptText = meeting.sourceUrl;
-  }
-
-  // 2) run steps
-  const summary = await summarization.summarize({ transcriptText });
-  const decisions = await decision.extract({ transcriptText });
-  const actionItems = await actionItem.extract({ transcriptText });
-  const confidenceScores = await confidence.score({ transcriptText, summary, decisions, actionItems });
-
-  // 3) versioning
-  const latest = await AiOutput.findOne({ meetingId }).sort({ version: -1 });
-  const nextVersion = latest ? latest.version + 1 : 1;
-
-  const aiOutput = await AiOutput.create({
-    meetingId,
-    version: nextVersion,
-    summary: summary.summary || [],
-    decisions: decisions.decisions || [],
-    actionItems: (actionItems.actionItems || []).map((it, idx) => ({
-      title: it.title || "",
-      ownerHint: it.ownerHint || "",
-      confidence: confidenceScores.actionItemConfidences?.[idx] ?? 0.5,
-    })),
-    confidenceScores: confidenceScores.confidenceScores || {},
-    rawOutput: {
-      summarization: summary,
-      decisionExtraction: decisions,
-      actionExtraction: actionItems,
-      confidence,
-    },
-  });
-
-  meeting.status = "REVIEW";
-  await meeting.save();
-
-  return { meetingId, version: aiOutput.version };
-};
-
-exports.getOutput = async (meetingId) => {
-  const latest = await AiOutput.findOne({ meetingId }).sort({ version: -1 });
-  return { output: latest };
-};
-```
-
--------------------------------------------------------------------------------
-
-## S10. Review Service (Human Approval Gate)
-
-Routes:
-- `GET /review/:meetingId`
-- `POST /review/:meetingId/approve`
-- `POST /review/:meetingId/refine`
-
-Business logic:
-1) `GET`: return latest AI output + any existing Review record.
-2) `approve`: create/update Review and set meeting.status to `APPROVED`.
-3) `refine`: call Review Bot (AI) to generate `{ diff, explanation }` only.
-
-Service skeleton:
-```js
-// src/services/review.service.js
-const Meeting = require("../models/Meeting");
-const AiOutput = require("../models/AiOutput");
-const Review = require("../models/Review");
-
-exports.get = async (meetingId) => {
-  const meeting = await Meeting.findById(meetingId);
-  const output = await AiOutput.findOne({ meetingId }).sort({ version: -1 });
-  const review = await Review.findOne({ meetingId });
-  return { meeting, output, review };
-};
-
-exports.approve = async (meetingId, body) => {
-  const meeting = await Meeting.findById(meetingId);
-  if (!meeting) {
-    const err = new Error("Meeting not found");
-    err.statusCode = 404;
-    throw err;
-  }
-  if (meeting.status !== "REVIEW") {
-    const err = new Error("Meeting not in REVIEW state");
-    err.statusCode = 400;
-    throw err;
-  }
-
-  const review = await Review.findOneAndUpdate(
-    { meetingId },
-    {
-      meetingId,
-      approvedBy: body.approvedBy,
-      finalSummary: body.finalSummary,
-      finalActionItems: body.finalActionItems,
-      approvedAt: new Date(),
-    },
-    { upsert: true, new: true }
-  );
-
-  meeting.status = "APPROVED";
-  await meeting.save();
-
-  return { ok: true, review };
-};
-
-exports.refine = async (meetingId, body) => {
-  // call HF refine bot and return { diff, explanation }
-  // NEVER auto-apply
-  return { diff: {}, explanation: "" };
-};
-```
-
--------------------------------------------------------------------------------
-
-## S11. Sync Services (Jira + Calendar)
-
-Routes:
-- `POST /sync/:meetingId/jira`
-- `POST /sync/:meetingId/calendar`
-
-Business logic:
-1) Check meeting.status is `APPROVED`.
-2) Read Review.finalActionItems (or latest AiOutput if no review, but recommended to require review).
-3) Create external objects (tickets/events).
-4) Set meeting.status to `SYNCED` (after both or per sync type).
-
-Skeleton:
-```js
-// src/services/jira.service.js
-exports.sync = async (meetingId, body) => {
-  // create tickets from approved items
-  return { ok: true, created: [] };
-};
-
-// src/services/calendar.service.js
-exports.sync = async (meetingId, body) => {
-  // create events from approved items
-  return { ok: true, created: [] };
-};
-```
-
--------------------------------------------------------------------------------
-
-## S12. Audit Logging (DO NOT SKIP)
-
-Whenever important actions happen, write an AuditLog record.
-Examples:
-- invite sent
-- meeting uploaded
-- pipeline started/failed
-- review approved
-- sync triggered
-
-Skeleton:
-```js
-// src/services/audit.service.js (optional helper)
-const AuditLog = require("../models/AuditLog");
-
-exports.log = async ({ actorId, action, entityType, entityId, metadata }) => {
-  return AuditLog.create({ actorId, action, entityType, entityId, metadata, timestamp: new Date() });
-};
-```
-
--------------------------------------------------------------------------------
-
-## S13. How Everything Connects (Diagram)
-
-```mermaid
-flowchart TD
-  U[User] --> W[Workspace]
-  W --> I[Invite]
-  W --> M[Meeting]
-  M --> AO[AiOutput v1..vN]
-  M --> R[Review]
-  M --> AL[AuditLog]
-  R --> S[Sync Jira/Calendar]
-```
+### The only “workflow” rule to remember
+AI writes draft JSON → review edits/approves → backend syncs.
 
 -------------------------------------------------------------------------------
 
@@ -1317,3 +799,349 @@ No analytics
 No Kafka
 No auto-execution
 No “smart suggestions” outside review
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+
+
+
+
+
+# Team Execution Plan (4 Devs) — Exact Tasks, Files, Steps, and Code Size
+
+You said you split the backend + AI into tasks for a team of 4.
+This section is the exact implementation checklist.
+
+Important notes before you start:
+- The repo already has scaffolding for `src/models/`, `src/routes/`, `src/controllers/`.
+- Your job now is to implement runtime wiring + the `src/services/` logic.
+- Keep controllers THIN: services do the work.
+- Keep AI JSON-only.
+- Any “external integrations” (Jira/Calendar/Email) can be mocked for hackathon.
+
+How to use this plan:
+- Each dev owns a set of files.
+- Each dev can implement in parallel.
+- Each task contains: what to do, where to do it, and approx LOC.
+
+-------------------------------------------------------------------------------
+
+## Dev 1 — Auth + Invites + Workspace (Foundation)
+
+Goal: Make auth and onboarding flow work end-to-end with MongoDB.
+
+### Task 1.1 — Add server bootstrap + route mounting
+Files:
+- `backend/src/app.js` (create)
+- `backend/src/server.js` (create)
+- `backend/src/config/env.js` (create)
+- `backend/src/config/db.js` (create)
+
+Steps:
+1) Create Express app in `src/app.js`.
+2) Add JSON body parsing.
+3) Mount routers:
+  - `/auth` → `routes/auth.routes.js`
+  - `/invites` → `routes/invite.routes.js`
+  - `/workspace` → `routes/workspace.routes.js`
+  - `/meetings` → `routes/meeting.routes.js`
+  - `/ai` → `routes/ai.routes.js`
+  - `/review` → `routes/review.routes.js`
+  - `/sync` → `routes/sync.routes.js`
+  - `/docs` → `routes/docs.routes.js`
+4) Create `src/config/db.js` that connects mongoose using `MONGO_URI`.
+5) Create `src/server.js` that calls `connectDb()` and starts listening.
+
+Approx code size:
+- `app.js`: ~40–80 LOC
+- `server.js`: ~25–60 LOC
+- `config/env.js`: ~15–40 LOC
+- `config/db.js`: ~25–60 LOC
+
+### Task 1.2 — Implement Auth service (minimal hackathon auth)
+Files:
+- `backend/src/services/auth.service.js` (create)
+- (optional) `backend/src/middlewares/auth.middleware.js` (create later; keep minimal)
+
+Steps:
+1) Implement `exports.signup(body)`:
+  - Create a User (`models/User.js`).
+  - Return `{ user }`.
+2) Implement `exports.login(body)`:
+  - Find user by email.
+  - If not found, throw 401.
+  - Return `{ user }`.
+
+Approx code size:
+- `auth.service.js`: ~60–120 LOC
+
+### Task 1.3 — Implement Workspace + Invite services
+Files:
+- `backend/src/services/workspace.service.js` (create)
+- `backend/src/services/invite.service.js` (create)
+- `backend/src/services/email.service.js` (create, mocked)
+
+Steps (workspace):
+1) Implement `getWorkspace(req)`:
+  - Decide how you get userId (temporary header or `req.user`).
+  - Return workspaces the user belongs to.
+2) Implement `invite(body)`:
+  - Delegate to `inviteService.send(body)`.
+
+Steps (invite):
+1) Implement `send(body)`:
+  - Generate token.
+  - Create Invite doc.
+  - Call `emailService.sendInvite(...)` (mock ok).
+2) Implement `validate(query)`:
+  - Validate token exists, not expired, not accepted.
+3) Implement `accept(body)`:
+  - Mark accepted.
+  - Add member to workspace.
+  - Create user if needed (hackathon friendly).
+
+Approx code size:
+- `workspace.service.js`: ~60–140 LOC
+- `invite.service.js`: ~140–260 LOC
+- `email.service.js`: ~30–80 LOC
+
+Done criteria:
+- You can signup/login.
+- You can create and accept invites.
+- `/workspace` returns something real from Mongo.
+
+-------------------------------------------------------------------------------
+
+## Dev 2 — Meetings + Upload + State Machine
+
+Goal: Meeting upload + meeting retrieval + correct state transitions.
+
+### Task 2.1 — Meeting service implementation
+Files:
+- `backend/src/services/meeting.service.js` (create)
+
+Steps:
+1) Implement `upload(body)`:
+  - Create Meeting with status `UPLOADED`.
+  - Save basic metadata (title, participants, sourceType, sourceUrl).
+2) Implement `start(meetingId)`:
+  - Load meeting.
+  - Enforce meeting.status == `UPLOADED`.
+  - Set status → `PROCESSING`.
+  - Trigger pipeline (call `aiService.process(meetingId)` OR enqueue job).
+  - Return `{ ok: true, meetingId }`.
+3) Implement `getById(meetingId)`:
+  - Return Meeting.
+  - (Optional) also return latest AiOutput and/or Review.
+
+Approx code size:
+- `meeting.service.js`: ~120–220 LOC
+
+### Task 2.2 — Status transition guard (shared)
+Files (choose one approach):
+- Option A: `backend/src/utils/constants.js` (add allowed transitions)
+- Option B: `backend/src/services/_helpers/status.js` (create helper)
+
+Steps:
+1) Implement a reusable `canTransition(from, to)`.
+2) Use it in meeting start + AI process + review approve + sync.
+
+Approx code size:
+- ~30–80 LOC
+
+Done criteria:
+- Meetings cannot skip states.
+- “Start processing” fails if not `UPLOADED`.
+
+-------------------------------------------------------------------------------
+
+## Dev 3 — AI Pipeline + Review Bot + Docs Bot
+
+Goal: Make the deterministic AI pipeline run and produce versioned JSON outputs.
+
+### Task 3.1 — Implement AI Orchestrator service
+Files:
+- `backend/src/services/ai.service.js` (create)
+
+Steps:
+1) Load meeting.
+2) Get transcriptText:
+  - If AUDIO: call transcription service.
+  - If TRANSCRIPT: use sourceUrl as transcript text (hackathon shortcut).
+3) Call each step service (summarization → decisions → action items → confidence).
+4) Validate the JSON contract shape (arrays exist).
+5) Save `AiOutput` with incremented version.
+6) Update meeting status to `REVIEW`.
+
+Approx code size:
+- `ai.service.js`: ~180–320 LOC
+
+### Task 3.2 — Implement per-step AI services (HF Inference API)
+Files:
+- `backend/src/config/ai.js` (create)
+- `backend/src/services/ai/transcription.service.js` (create)
+- `backend/src/services/ai/summarization.service.js` (create)
+- `backend/src/services/ai/decision.service.js` (create)
+- `backend/src/services/ai/actionItem.service.js` (create)
+- `backend/src/services/ai/confidence.service.js` (create)
+
+Steps:
+1) In `config/ai.js`, store:
+  - token env var `HF_API_TOKEN`
+  - model IDs per step
+2) For each step service:
+  - implement exactly ONE exported method:
+    - transcription: `transcribe({ sourceUrl })`
+    - summarization: `summarize({ transcriptText })`
+    - decision: `extract({ transcriptText })`
+    - actionItem: `extract({ transcriptText })`
+    - confidence: `score({ transcriptText, summary, decisions, actionItems })`
+3) Enforce JSON-only parsing:
+  - if parse fails → throw error
+4) Return objects that match the contracts in section 6.
+
+Approx code size:
+- `config/ai.js`: ~40–90 LOC
+- each AI step service: ~80–180 LOC
+- total for step services: ~400–900 LOC
+
+### Task 3.3 — Review refine bot (diff-only)
+Files:
+- `backend/src/services/review.service.js` (create)
+- (optional) `backend/src/utils/jsonDiff.js` (create helper)
+
+Steps:
+1) Implement `get(meetingId)`:
+  - return meeting + latest AiOutput + existing Review.
+2) Implement `approve(meetingId, body)`:
+  - require meeting.status == `REVIEW`
+  - save Review
+  - set meeting.status → `APPROVED`
+3) Implement `refine(meetingId, body)`:
+  - call HF “refine” prompt
+  - return `{ diff, explanation }`
+  - NEVER auto-apply
+
+Approx code size:
+- `review.service.js`: ~180–340 LOC
+- `jsonDiff.js` helper: ~80–200 LOC
+
+### Task 3.4 — Docs Bot (DOT)
+Files:
+- `backend/src/services/docs.service.js` (create)
+- `backend/src/utils/promptBuilder.js` (optional)
+- `backend/src/docs/` (create markdown files; optional)
+
+Steps:
+1) Load static markdown files.
+2) Build a prompt “answer from docs only”.
+3) Call HF model.
+4) Return an answer.
+
+Hard constraints:
+- Must NOT read meetings.
+- Must NOT read AI outputs.
+- Must NOT modify data.
+
+Approx code size:
+- `docs.service.js`: ~150–300 LOC
+
+Done criteria:
+- `POST /ai/process/:meetingId` creates `AiOutput`.
+- `GET /ai/output/:meetingId` returns latest version.
+- `POST /review/:meetingId/refine` returns diff-only.
+- `POST /docs/ask` answers from static docs.
+
+-------------------------------------------------------------------------------
+
+## Dev 4 — Sync + Queues + Audit Logs
+
+Goal: After approval, create external outputs (mock ok) and track everything.
+
+### Task 4.1 — Implement Sync services
+Files:
+- `backend/src/services/jira.service.js` (create)
+- `backend/src/services/calendar.service.js` (create)
+
+Steps:
+1) For each sync method:
+  - Verify meeting.status == `APPROVED`.
+  - Load Review (approved data).
+  - Create mock objects (or real API calls if available).
+  - Return `{ ok: true, created: [...] }`.
+2) Decide how meeting.status becomes `SYNCED`:
+  - either after each sync, or after both complete.
+
+Approx code size:
+- `jira.service.js`: ~120–260 LOC
+- `calendar.service.js`: ~120–260 LOC
+
+### Task 4.2 — Queues (BullMQ) integration (recommended)
+Files:
+- `backend/src/config/redis.js` (create)
+- `backend/src/queues/ai.queue.js` (create)
+- `backend/src/queues/sync.queue.js` (create)
+- `backend/src/queues/email.queue.js` (create)
+
+Steps:
+1) Configure Redis connection.
+2) For AI:
+  - `meeting.start` enqueues a job.
+  - worker runs `aiService.process(meetingId)`.
+3) For Sync:
+  - `sync.controller` enqueues job.
+  - worker calls jira/calendar services.
+4) For Email:
+  - invite service enqueues email job.
+
+Approx code size:
+- `redis.js`: ~40–90 LOC
+- each queue file: ~120–260 LOC
+- total: ~400–900 LOC
+
+### Task 4.3 — Audit logging everywhere
+Files:
+- `backend/src/services/audit.service.js` (create)
+- (touch other services to call audit log)
+
+Steps:
+1) Implement `auditService.log({ actorId, action, entityType, entityId, metadata })`.
+2) Add calls in:
+  - invite.send / accept
+  - meeting.upload / start
+  - ai.process success/fail
+  - review.approve
+  - sync.jira / sync.calendar
+
+Approx code size:
+- `audit.service.js`: ~40–90 LOC
+- audit calls sprinkled across services: ~40–120 LOC
+
+Done criteria:
+- You can trigger sync after approval.
+- Jobs can run async (optional but recommended).
+- AuditLog records are created for key actions.
+
+-------------------------------------------------------------------------------
+
+## Final Integration Checklist (Everyone)
+
+1) Add `.env` keys:
+  - `PORT`
+  - `MONGO_URI`
+  - `HF_API_TOKEN`
+  - (optional) `REDIS_URL`
+2) Update `backend/package.json` dependencies (Express, Mongoose, BullMQ, Redis, etc.).
+3) Ensure route prefixes match the README:
+  - `/auth/*`, `/invites/*`, `/workspace/*`, `/meetings/*`, `/ai/*`, `/review/*`, `/sync/*`, `/docs/*`
+4) Manual happy-path test sequence:
+  - signup → create workspace → send invite → accept invite
+  - upload meeting (TRANSCRIPT) → start → ai output created → review approve → sync
+
+-------------------------------------------------------------------------------
