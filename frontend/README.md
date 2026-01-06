@@ -20,7 +20,7 @@ MeetOps is a frontend-only, enterprise workflow app that transforms meeting conv
 
 - **Framework**: React 18
 - **Router**: React Router v6+
-- **Language**: TypeScript (strict)
+- **Language**: JavaScript
 - **Bundler**: Vite
 - **Styling**: Tailwind CSS
 - **State Management**: Zustand
@@ -40,49 +40,49 @@ MeetOps is a frontend-only, enterprise workflow app that transforms meeting conv
 
 ```
 src/
-├── main.tsx                          # React entry point
-├── App.tsx                           # App root (Router + Providers)
+├── main.jsx                          # React entry point
+├── App.jsx                           # App root (Router + Providers)
 │
 ├── router/
-│   └── AppRouter.tsx                 # React Router v6+ configuration
+│   └── AppRouter.jsx                 # React Router v6+ configuration
 │
 ├── layouts/
-│   ├── RootLayout.tsx                # Global wrapper (theme, cursor, motion)
-│   ├── AuthLayout.tsx                # Minimal auth layout
-│   └── AppLayout.tsx                 # Logged-in shell (header, nav, context bar)
+│   ├── RootLayout.jsx                # Global wrapper (theme, cursor, motion)
+│   ├── AuthLayout.jsx                # Minimal auth layout
+│   └── AppLayout.jsx                 # Logged-in shell (header, nav, context bar)
 │
 ├── pages/
 │   ├── auth/
-│   │   ├── Login.tsx
-│   │   └── Signup.tsx
+│   │   ├── Login.jsx
+│   │   └── Signup.jsx
 │   ├── workspace/
-│   │   └── Workspace.tsx
+│   │   └── Workspace.jsx
 │   ├── integrations/
-│   │   └── Integrations.tsx
+│   │   └── Integrations.jsx
 │   ├── upload/
-│   │   └── Upload.tsx
+│   │   └── Upload.jsx
 │   ├── processing/
-│   │   └── Processing.tsx
+│   │   └── Processing.jsx
 │   ├── review/
-│   │   └── Review.tsx                # CORE VALUE PAGE
+│   │   └── Review.jsx                # CORE VALUE PAGE
 │   ├── result/
-│   │   └── Result.tsx
+│   │   └── Result.jsx
 │   ├── docs/
-│   │   └── Docs.tsx
-│   ├── NotFound.tsx
-│   └── ErrorBoundary.tsx
+│   │   └── Docs.jsx
+│   ├── NotFound.jsx
+│   └── ErrorBoundary.jsx
 │
 ├── components/
 │   ├── layout/
-│   │   ├── AppHeader.tsx             # Workflow-aware header
-│   │   └── AuthHeader.tsx
+│   │   ├── AppHeader.jsx             # Workflow-aware header
+│   │   └── AuthHeader.jsx
 │   ├── ui/                           # PURE UI PRIMITIVES
-│   │   ├── Button.tsx
-│   │   ├── Input.tsx
-│   │   ├── Select.tsx
-│   │   ├── Card.tsx
-│   │   ├── Badge.tsx
-│   │   ├── Modal.tsx
+│   │   ├── Button.jsx
+│   │   ├── Input.jsx
+│   │   ├── Select.jsx
+│   │   ├── Card.jsx
+│   │   ├── Badge.jsx
+│   │   ├── Modal.jsx
 │   │   └── ...
 │   ├── workflow/                     # PAGE-SPECIFIC BLOCKS
 │   │   ├── Upload/
@@ -90,46 +90,32 @@ src/
 │   │   ├── Review/
 │   │   └── Result/
 │   ├── chatbot/
-│   │   └── AiPanel.tsx               # AI refinement panel (Review page only)
+│   │   └── AiPanel.jsx               # AI refinement panel (Review page only)
 │   ├── cursor/
-│   │   └── CustomCursor.tsx          # Custom cursor component
+│   │   └── CustomCursor.jsx          # Custom cursor component
 │   ├── grid/
-│   │   └── GridLines.tsx             # Grid overlay for hero sections
+│   │   └── GridLines.jsx             # Grid overlay for hero sections
 │   └── loaders/
-│       ├── GlobalLoader.tsx          # App-level loader
-│       ├── PageLoader.tsx            # Route-level Suspense fallback
-│       └── InlineLoader.tsx          # Buttons, cards, tables
+│       ├── GlobalLoader.jsx          # App-level loader
+│       ├── PageLoader.jsx            # Route-level Suspense fallback
+│       └── InlineLoader.jsx          # Buttons, cards, tables
 │
 ├── stores/                           # ZUSTAND STORES
-│   ├── auth.store.ts
-│   ├── workspace.store.ts
-│   ├── meeting.store.ts
-│   └── ui.store.ts
+│   ├── auth.store.js
+│   ├── workspace.store.js
+│   ├── meeting.store.js
+│   └── ui.store.js
 │
 ├── hooks/
-│   ├── useAuth.ts
-│   ├── useWorkflowStep.ts
-│   ├── useMediaQuery.ts
-│   └── useStreamingText.ts           # Streaming output helper
-│
-├── mock/
-│   └── mockData.ts                   # SINGLE SOURCE OF TRUTH (ALL MOCK DATA)
+│   ├── useAuth.js
+│   ├── useWorkflowStep.js
+│   ├── use-toast.js
+│   └── useStreamingText.js           # Streaming output helper
 │
 ├── lib/
-│   ├── constants.ts
-│   ├── routes.ts
-│   └── utils.ts
-│
-├── types/
-│   ├── auth.ts
-│   ├── workspace.ts
-│   ├── meeting.ts
-│   ├── actionItem.ts
-│   └── integration.ts
-│
-└── styles/
-    ├── globals.css
-    └── theme.css
+│   ├── constants.js
+│   ├── mockData.js                   # SINGLE SOURCE OF TRUTH (ALL MOCK DATA)
+│   └── utils.js
 ```
 
 ## 🚀 Getting Started
@@ -228,7 +214,7 @@ The application follows a linear, guided workflow:
 
 ### Custom Cursor
 
-- **Location**: `src/components/cursor/CustomCursor.tsx`
+- **Location**: `src/components/cursor/CustomCursor.jsx`
 - **Features**:
   - Desktop-only (disabled on mobile/touch devices)
   - Outer ring (32px) expands to 48px on hover
@@ -244,7 +230,7 @@ The application follows a linear, guided workflow:
 
 ### Grid Lines Overlay
 
-- **Location**: `src/components/ui/GridLines.tsx`
+- **Location**: `src/components/ui/GridLines.jsx`
 - **Usage**: Only on hero sections (logged-out pages)
 - **Features**:
   - 12-column vertical grid
@@ -259,7 +245,7 @@ The application follows a linear, guided workflow:
 
 ### AI Chatbot Panel
 
-- **Location**: `src/components/chatbot/AiPanel.tsx`
+- **Location**: `src/components/chatbot/AiPanel.jsx`
 - **Usage**: Review page only (`/review`)
 - **Features**:
   - Slides from right (400px width)
@@ -269,13 +255,13 @@ The application follows a linear, guided workflow:
   - Apply button (disabled until streaming completes)
 
 **Implementation Details**:
-- State managed via `ui.store.ts`
+- State managed via `ui.store.js`
 - Animated with Framer Motion (slide-in from right)
 - Mock streaming implementation using controlled state updates
 
 ### Keyboard Shortcuts
 
-- **Location**: `src/components/ui/KeyboardShortcuts.tsx`
+- **Location**: `src/components/ui/KeyboardShortcuts.jsx`
 - **Shortcuts**:
   - `Cmd/Ctrl+K`: Open shortcuts menu
   - `Cmd/Ctrl+N`: New meeting
@@ -296,7 +282,7 @@ This project was initially created with Lovable.dev. The following references ha
    - **Added**: MeetOps-specific meta tags
    - **Location**: Root directory
 
-2. **`vite.config.ts`**
+2. **`vite.config.js`**
    - **Removed**: `componentTagger` import from `lovable-tagger`
    - **Removed**: `componentTagger()` plugin from Vite config
    - **Location**: Root directory
@@ -308,7 +294,7 @@ This project was initially created with Lovable.dev. The following references ha
 ### Where Changes Were Made
 
 - **`index.html`**: Lines 7-19 - All Lovable references replaced with MeetOps branding
-- **`vite.config.ts`**: Lines 4 and 12 - Lovable tagger completely removed from build process
+- **`vite.config.js`**: Lines 4 and 12 - Lovable tagger completely removed from build process
 
 ### Verification
 
@@ -321,12 +307,12 @@ This should only show references in `package-lock.json` (which is fine) and `pac
 
 ## 📦 Mock Data
 
-All mock data is centralized in `src/lib/mockData.ts`. This is a **single source of truth** for all fake data used throughout the application.
+All mock data is centralized in `src/lib/mockData.js`. This is a **single source of truth** for all fake data used throughout the application.
 
-**Rule**: No component or page should define inline mock objects. All mock data must be imported from `mockData.ts`.
+**Rule**: No component or page should define inline mock objects. All mock data must be imported from `mockData.js`.
 
 **Example**:
-```typescript
+```js
 // ✅ CORRECT
 import { getMockMeeting } from "@/lib/mockData";
 const meeting = getMockMeeting();
@@ -390,7 +376,7 @@ Additional documentation can be found:
 ## 🚧 Future Enhancements
 
 When backend integration is added:
-1. Replace `mockData.ts` with API calls
+1. Replace `mockData.js` with API calls
 2. Implement real authentication
 3. Connect to real AI services
 4. Add real JIRA & Calendar OAuth flows

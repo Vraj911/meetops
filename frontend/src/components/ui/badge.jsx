@@ -1,0 +1,36 @@
+import { cva } from "class-variance-authority";
+import { cn } from "@/lib/utils";
+const badgeVariants = cva(
+  "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors",
+  {
+    variants: {
+      variant: {
+        default: "bg-primary/10 text-primary border border-primary/20",
+        secondary: "bg-secondary text-secondary-foreground border border-border",
+        destructive: "bg-destructive/10 text-destructive border border-destructive/20",
+        success: "bg-success/10 text-success border border-success/20",
+        warning: "bg-warning/10 text-warning border border-warning/20",
+        outline: "text-foreground border border-border",
+        // Confidence badges
+        "confidence-high": "bg-success/10 text-success border border-success/30",
+        "confidence-medium": "bg-warning/10 text-warning border border-warning/30",
+        "confidence-low": "bg-destructive/10 text-destructive border border-destructive/30",
+        // Priority badges
+        "priority-critical": "bg-destructive text-destructive-foreground",
+        "priority-high": "bg-warning/80 text-warning-foreground",
+        "priority-medium": "bg-primary/20 text-primary",
+        "priority-low": "bg-muted text-muted-foreground"
+      }
+    },
+    defaultVariants: {
+      variant: "default"
+    }
+  }
+);
+function Badge({ className, variant, ...props }) {
+  return <div className={cn(badgeVariants({ variant }), className)} {...props} />;
+}
+export {
+  Badge,
+  badgeVariants
+};
