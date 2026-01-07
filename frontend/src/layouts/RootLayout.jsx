@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { CustomCursor } from "@/components/cursor/CustomCursor";
+import { GridLines } from "@/components/grid/GridLines";
 import { MotionConfig } from "@/components/motion/MotionConfig";
 import { useUIStore } from "@/stores/ui.store";
 import { useMounted } from "@/hooks/useMounted";
@@ -12,7 +13,7 @@ function RootLayout({ children }) {
       favicon.href = theme === "dark" ? "/logo_light.jpeg" : "/logo_dark.jpeg";
     }
   }, [theme, mounted]);
-  return <><CustomCursor /><MotionConfig>{children}</MotionConfig></>;
+  return <div className="relative"><CustomCursor /><GridLines className="text-foreground" /><div className="relative z-10"><MotionConfig>{children}</MotionConfig></div></div>;
 }
 export {
   RootLayout

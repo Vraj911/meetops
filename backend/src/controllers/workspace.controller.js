@@ -1,4 +1,14 @@
 const workspaceService = require("../services/workspace.service");
+const { Workspace } = require("../config/mongoose");
+
+exports.getAllWorkspaces = async (req, res, next) => {
+  try {
+    const workspaces = await Workspace.find().populate("ownerId");
+    return res.json({ success: true, data: workspaces });
+  } catch (error) {
+    return next(error);
+  }
+};
 
 exports.getWorkspace = async (req, res, next) => {
   try {

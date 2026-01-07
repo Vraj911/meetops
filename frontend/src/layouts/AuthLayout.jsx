@@ -1,11 +1,8 @@
 import { Outlet } from "react-router-dom";
-import { GridLines } from "@/components/grid/GridLines";
 import { MeetOpsLogoLink } from "@/components/ui/MeetOpsLogo";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 function AuthLayout() {
   return <div className="min-h-screen bg-background flex flex-col relative overflow-hidden">{
-    /* Grid overlay for hero sections */
-  }<GridLines />{
     /* Header */
   }<header className="relative z-10 flex items-center justify-between px-6 py-4"><MeetOpsLogoLink to="/login" /><ThemeToggle /></header>{
     /* Content */
