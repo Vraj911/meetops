@@ -20,7 +20,7 @@ const jiraClient = new JiraApi({
   host: hostNormalized,
   username: process.env.JIRA_EMAIL,
   password: process.env.JIRA_API_TOKEN,
-  apiVersion: '2',
+  apiVersion: '3',
   strictSSL: true,
 });
 

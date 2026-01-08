@@ -13,6 +13,8 @@ const aiRoutes = require('./src/routes/ai.routes');
 const inviteRoutes = require('./src/routes/invite.routes');
 const docsRoutes = require('./src/routes/docs.routes');
 const syncRoutes = require('./src/routes/sync.routes');
+const oauthRoutes = require('./src/routes/oauth.routes');
+const devRoutes = require('./src/routes/dev.routes');
 
 // ==================== EXPRESS APP SETUP ====================
 
@@ -44,6 +46,12 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/invites', inviteRoutes);
 app.use('/api/docs', docsRoutes);
 app.use('/api/sync', syncRoutes);
+app.use('/api/oauth', oauthRoutes);
+
+// Dev utilities (disable in production)
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/api/dev', devRoutes);
+}
 
 // ==================== EXPORT ====================
 

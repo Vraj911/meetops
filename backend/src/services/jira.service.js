@@ -6,26 +6,74 @@ const { Meeting, AiOutput, Review } = require('../config/mongoose');
  */
 
 /**
+ * Convert plain text to Atlassian Document Format (ADF)
+ */
+function toADF(text) {
+  if (!text) {
+    return {
+      version: 1,
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: []
+        }
+      ]
+    };
+  }
+
+  // Split by newlines and create paragraphs
+  const paragraphs = text.split('\n').filter(line => line.trim());
+  
+  return {
+    version: 1,
+    type: 'doc',
+    content: paragraphs.map(para => ({
+      type: 'paragraph',
+      content: [
+        {
+          type: 'text',
+          text: para
+        }
+      ]
+    }))
+  };
+}
+
+/**
  * Create Jira issue from action item
- * @param {Object} data - { summary, description, issueType, projectKey }
+ * @param {Object} data - { summary, description, issueType, projectKey, priority }
  * @returns {Promise<Object>} - { key, id, url }
  */
 exports.createIssue = async (data) => {
   try {
-    const { summary, description, issueType = 'Task', projectKey } = data;
+    const { summary, description, issueType = 'Task', projectKey, priority } = data;
 
-    const issue = await jiraClient.addNewIssue({
-      fields: {
-        project: {
-          key: projectKey || process.env.JIRA_PROJECT_KEY,
-        },
-        summary,
-        description: description || '',
-        issuetype: {
-          name: issueType,
-        },
+    const fields = {
+      project: {
+        key: projectKey || process.env.JIRA_PROJECT_KEY,
       },
-    });
+      summary,
+      description: toADF(description || ''),
+      issuetype: {
+        name: issueType,
+      },
+    };
+
+    // Add priority if provided (map: critical->Highest, high->High, medium->Medium, low->Low)
+    if (priority) {
+      const priorityMap = {
+        'critical': 'Highest',
+        'high': 'High',
+        'medium': 'Medium',
+        'low': 'Low',
+        'lowest': 'Lowest',
+      };
+      const jiraPriority = priorityMap[priority.toLowerCase()] || 'Medium';
+      fields.priority = { name: jiraPriority };
+    }
+
+    const issue = await jiraClient.addNewIssue({ fields });
 
     console.log(`✓ Jira issue created: ${issue.key}`);
     return {
@@ -56,6 +104,7 @@ exports.createIssuesFromActionItems = async (actionItems, meetingId) => {
           item.description || `Owner: ${item.ownerHint || 'Unassigned'}\nConfidence: ${item.confidence ?? 'n/a'}`,
         issueType: item.issueType || 'Task',
         projectKey: item.projectKey || process.env.JIRA_PROJECT_KEY,
+        priority: item.priority,
       });
 
       // Store linkage in metadata (optional)
@@ -81,7 +130,9 @@ exports.createIssuesFromActionItems = async (actionItems, meetingId) => {
  */
 exports.addComment = async (issueKey, comment) => {
   try {
-    await jiraClient.addComment(issueKey, comment);
+    await jiraClient.addComment(issueKey, {
+      body: toADF(comment)
+    });
 
     console.log(`✓ Comment added to ${issueKey}`);
   } catch (error) {
@@ -197,10 +248,17 @@ exports.syncReviewDataToJira = async (meetingId, reviewData) => {
 
     if (createdIssues.length > 0) {
       const firstIssue = createdIssues[0];
-      await exports.addComment(
-        firstIssue.issueKey,
-        `📋 Summary from Meeting:\n\n${summaryText}\n\nSync Date: ${new Date().toISOString()}`
-      );
+      try {
+        await exports.addComment(
+          firstIssue.issueKey,
+          `📋 Summary from Meeting:\n\n${summaryText}\n\nSync Date: ${new Date().toISOString()}`
+        );
+      } catch (err) {
+        console.warn(
+          `⚠️  Comment skipped for ${firstIssue.issueKey}:`,
+          err?.message || err
+        );
+      }
     }
 
     if (meeting) {

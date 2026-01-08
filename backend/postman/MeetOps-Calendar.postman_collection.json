@@ -1,0 +1,146 @@
+{
+  "info": {
+    "name": "MeetOps - Calendar Sync",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "a7d3f1c0-4f9a-48b7-9d6e-8f0f5c6b1c11"
+  },
+  "item": [
+    {
+      "name": "Sync Calendar",
+      "item": [
+        {
+          "name": "1) Get APPROVED meetingId",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/meetings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "meetings"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "const list = (res && res.data) || [];",
+                  "const approved = list.find(m => m.status === 'APPROVED');",
+                  "pm.test('Found at least one meeting', function () { pm.expect(list.length).to.be.above(0); });",
+                  "pm.test('Found APPROVED meeting', function () { pm.expect(!!approved).to.eql(true); });",
+                  "if (approved) {",
+                  "  pm.environment.set('meetingId', approved._id);",
+                  "  console.log('✅ Set meetingId:', approved._id);",
+                  "} else {",
+                  "  console.warn('No APPROVED meetings. Run seed: npm run seed:sync or approve a meeting.');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2) Sync Calendar (from DB action items)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/sync/{{meetingId}}/calendar",
+              "host": ["{{base_url}}"],
+              "path": ["api", "sync", "{{meetingId}}", "calendar"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "if (!pm.environment.get('meetingId')) {",
+                  "  postman.setNextRequest('1) Get APPROVED meetingId');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('success=true', function () { pm.expect(json.success).to.eql(true); });",
+                  "pm.test('Has data/results', function () { pm.expect(json.data).to.be.an('object'); });",
+                  "if (json.data) {",
+                  "  pm.test('Counts add up', function () { pm.expect((json.data.succeeded||0)+(json.data.failed||0)).to.eql(json.data.totalItems); });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "3) Sync Calendar (with actionItems payload)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"calendarId\": \"primary\",\n  \"actionItems\": [\n    { \"title\": \"Complete project proposal\", \"ownerHint\": \"you@example.com\", \"dueDate\": \"2030-01-15T10:00:00Z\" },\n    { \"title\": \"Set up CI pipeline\" }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/sync/{{meetingId}}/calendar",
+              "host": ["{{base_url}}"],
+              "path": ["api", "sync", "{{meetingId}}", "calendar"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "if (!pm.environment.get('meetingId')) {",
+                  "  postman.setNextRequest('1) Get APPROVED meetingId');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('success=true', function () { pm.expect(json.success).to.eql(true); });",
+                  "pm.test('Has event results', function () { pm.expect(json.data.results).to.be.an('array'); });",
+                  "pm.test('No schema errors', function () { pm.expect(json.data.failed).to.be.a('number'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": []
+}
