@@ -19,4 +19,6 @@ const AiOutputSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-module.exports = mongoose.model("AiOutput", AiOutputSchema);
+module.exports =
+  mongoose.models.AiOutput ||
+  mongoose.model("AiOutput", AiOutputSchema);

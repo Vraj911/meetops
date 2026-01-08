@@ -12,4 +12,6 @@ const AuditLogSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-module.exports = mongoose.model("AuditLog", AuditLogSchema);
+module.exports =
+  mongoose.models.AuditLog ||
+  mongoose.model("AuditLog", AuditLogSchema);

@@ -16,4 +16,6 @@ const InviteSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-module.exports = mongoose.model("Invite", InviteSchema);
+module.exports =
+  mongoose.models.Invite ||
+  mongoose.model("Invite", InviteSchema);

@@ -14,4 +14,6 @@ const WorkspaceSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-module.exports = mongoose.model("Workspace", WorkspaceSchema);
+module.exports =
+  mongoose.models.Workspace ||
+  mongoose.model("Workspace", WorkspaceSchema);
