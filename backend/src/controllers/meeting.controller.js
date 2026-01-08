@@ -10,29 +10,29 @@ exports.getAllMeetings = async (req, res, next) => {
   }
 };
 
-exports.upload = async (req, res, next) => {
+exports.upload = async (req, res) => {
   try {
     const result = await meetingService.upload(req.body);
-    return res.json(result);
+    return res.json({ success: true, data: result });
   } catch (error) {
-    return next(error);
+    return res.status(400).json({ success: false, error: error.message });
   }
 };
 
-exports.start = async (req, res, next) => {
+exports.start = async (req, res) => {
   try {
     const result = await meetingService.start(req.params.id);
-    return res.json(result);
+    return res.json({ success: true, data: result });
   } catch (error) {
-    return next(error);
+    return res.status(400).json({ success: false, error: error.message });
   }
 };
 
-exports.getById = async (req, res, next) => {
+exports.getById = async (req, res) => {
   try {
     const result = await meetingService.getById(req.params.id);
-    return res.json(result);
+    return res.json({ success: true, data: result });
   } catch (error) {
-    return next(error);
+    return res.status(404).json({ success: false, error: error.message });
   }
 };

@@ -1,0 +1,23 @@
+const MEETING_STATUS = Object.freeze({
+  UPLOADED: "UPLOADED",
+  PROCESSING: "PROCESSING",
+  REVIEW: "REVIEW",
+  APPROVED: "APPROVED",
+  SYNCED: "SYNCED",
+  FAILED: "FAILED",
+});
+
+const ALLOWED = new Set([
+  `${MEETING_STATUS.UPLOADED}->${MEETING_STATUS.PROCESSING}`,
+  `${MEETING_STATUS.PROCESSING}->${MEETING_STATUS.REVIEW}`,
+  `${MEETING_STATUS.PROCESSING}->${MEETING_STATUS.FAILED}`,
+  `${MEETING_STATUS.REVIEW}->${MEETING_STATUS.APPROVED}`,
+  `${MEETING_STATUS.APPROVED}->${MEETING_STATUS.SYNCED}`,
+]);
+
+function canTransition(from, to) {
+  if (!from || !to) return false;
+  return ALLOWED.has(`${from}->${to}`);
+}
+
+module.exports = { MEETING_STATUS, canTransition };
