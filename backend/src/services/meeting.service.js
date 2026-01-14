@@ -14,11 +14,10 @@ exports.upload = async (data) => {
   if (!sourceType || (sourceType !== "TRANSCRIPT" && sourceType !== "AUDIO"))
     throw new Error('sourceType is required and must be "TRANSCRIPT" or "AUDIO"');
   if (!sourceUrl) throw new Error("sourceUrl is required");
-  if (!createdBy) throw new Error("createdBy is required");
 
   const meeting = new Meeting({
     workspaceId,
-    createdBy,
+    createdBy: createdBy || "demo-user",
     title,
     sourceType,
     sourceUrl,

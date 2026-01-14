@@ -1,6 +1,8 @@
 const jiraService = require("../services/jira.service");
 const calendarService = require("../services/calendar.service");
-const { Meeting, User, Workspace } = require("../config/mongoose");
+const Meeting = require("../models/Meeting");
+const User = require("../models/User");
+const Workspace = require("../models/Workspace");
 const mongoose = require("mongoose");
 
 exports.syncJira = async (req, res, next) => {

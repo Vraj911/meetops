@@ -3,6 +3,8 @@ import { X, Sparkles, Check, ChevronRight, Send, MessageSquare } from "lucide-re
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useUIStore } from "@/stores/ui.store";
+import { useMeetingStore } from "@/stores/meeting.store";
+import { refineAiOutput } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -16,6 +18,7 @@ const predefinedPrompts = [
 ];
 function AiPanel({ onApply }) {
   const { aiPanelOpen, setAiPanelOpen } = useUIStore();
+  const { meetingId } = useMeetingStore();
   const [selectedPrompt, setSelectedPrompt] = useState(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamedText, setStreamedText] = useState("");
@@ -35,20 +38,28 @@ function AiPanel({ onApply }) {
     setStreamedText("");
     setCanApply(false);
     setPreviewData(null);
-    const mockResponse = "Found 2 missing action items from the transcript:\n1. Update deployment docs (mentioned at 14:40)\n2. Schedule follow-up meeting (mentioned at 14:52)";
-    const words = mockResponse.split(" ");
-    for (let i = 0; i < words.length; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      setStreamedText(words.slice(0, i + 1).join(" "));
+    
+    try {
+      const instruction = predefinedPrompts.find(p => p.id === promptId)?.label || promptId;
+      const response = await refineAiOutput(meetingId, instruction);
+      
+      // Display the diff/explanation from backend
+      const mockResponse = response.explanation || `Applied: "${instruction}". ${response.changes ? `Changes: ${JSON.stringify(response.changes)}` : ""}`;
+      const words = mockResponse.split(" ");
+      for (let i = 0; i < words.length; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        setStreamedText(words.slice(0, i + 1).join(" "));
+      }
+      setPreviewData({
+        changes: response.changes || { added: 0, removed: 0, merged: 0 },
+        explanation: response.explanation || "",
+        confidence_impact: response.confidenceImpact || "0%"
+      });
+    } catch (err) {
+      console.error("Refine failed:", err);
+      setStreamedText(`Error: ${err.message}`);
+      setPreviewData(null);
     }
-    setPreviewData({
-      changes: {
-        added: 2,
-        removed: 0,
-        merged: 0
-      },
-      confidence_impact: "+12%"
-    });
     setIsStreaming(false);
     setCanApply(true);
   };

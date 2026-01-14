@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { getAiOutput, createMeeting as apiCreateMeeting, startMeetingAPI, getMeeting } from "@/lib/api";
 import {
   getMockMeeting,
   getMockActionItems,
@@ -17,6 +18,11 @@ const useMeetingStore = create()((set, get) => ({
   actionItems: [],
   transcript: [],
   syncResult: null,
+  meetingId: null,
+  aiOutput: null,
+  loading: false,
+  error: null,
+  status: "DRAFT",
   setMeeting: (meetingData) => {
     const current = get().meeting || getMockMeeting();
     set({ meeting: { ...current, ...meetingData } });
@@ -72,7 +78,7 @@ const useMeetingStore = create()((set, get) => ({
   },
   syncToServices: async () => {
     const state = get();
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL;
 
     // Build payload from review page
     const summaryText = [
@@ -188,6 +194,108 @@ const useMeetingStore = create()((set, get) => ({
       });
     }
   },
+  setMeetingId: (id) => {
+    set({ meetingId: id });
+  },
+  createMeeting: async (data) => {
+    set({ loading: true, error: null });
+    try {
+      const response = await apiCreateMeeting(data);
+      set({
+        meeting: response,
+        meetingId: response.id,
+        status: response.status || "UPLOADED",
+        loading: false
+      });
+      return response;
+    } catch (err) {
+      set({
+        error: err.message || "Failed to create meeting",
+        loading: false
+      });
+      throw err;
+    }
+  },
+  startMeeting: async () => {
+    const state = get();
+    if (!state.meetingId) {
+      const error = "No meeting ID available";
+      set({ error });
+      throw new Error(error);
+    }
+    set({ loading: true, error: null });
+    try {
+      const response = await startMeetingAPI(state.meetingId);
+      set({
+        meeting: response,
+        status: response.status || "PROCESSING",
+        loading: false
+      });
+      return response;
+    } catch (err) {
+      set({
+        error: err.message || "Failed to start meeting",
+        loading: false
+      });
+      throw err;
+    }
+  },
+  fetchMeeting: async () => {
+    const state = get();
+    if (!state.meetingId) {
+      set({ error: "No meeting ID available" });
+      return;
+    }
+    set({ loading: true, error: null });
+    try {
+      const data = await getMeeting(state.meetingId);
+      set({
+        meeting: data,
+        status: data.status || state.status,
+        loading: false
+      });
+    } catch (err) {
+      set({
+        error: err.message || "Failed to fetch meeting",
+        loading: false
+      });
+    }
+  },
+  fetchAiOutput: async () => {
+    const state = get();
+    if (!state.meetingId) {
+      set({ error: 'No meeting ID available' });
+      return;
+    }
+    set({ loading: true, error: null });
+    try {
+      const data = await getAiOutput(state.meetingId);
+      set({ aiOutput: data, loading: false });
+    } catch (err) {
+      set({ 
+        error: err.message || 'Failed to fetch AI output',
+        loading: false 
+      });
+    }
+  },
+  clearMeeting: () => {
+    set({
+      meeting: null,
+      uploadedFile: null,
+      uploadMethod: "transcript",
+      processingSteps: [],
+      isProcessing: false,
+      summary: null,
+      actionItems: [],
+      transcript: [],
+      syncResult: null,
+      meetingId: null,
+      aiOutput: null,
+      loading: false,
+      error: null,
+      status: "DRAFT"
+    });
+  },
   reset: () => {
     set({
       meeting: null,
@@ -198,7 +306,12 @@ const useMeetingStore = create()((set, get) => ({
       summary: null,
       actionItems: [],
       transcript: [],
-      syncResult: null
+      syncResult: null,
+      meetingId: null,
+      aiOutput: null,
+      loading: false,
+      error: null,
+      status: "DRAFT"
     });
   }
 }));

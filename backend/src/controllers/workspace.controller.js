@@ -1,5 +1,5 @@
 const workspaceService = require("../services/workspace.service");
-const { Workspace } = require("../config/mongoose");
+const Workspace = require("../models/Workspace");
 
 exports.getAllWorkspaces = async (req, res, next) => {
   try {

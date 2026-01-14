@@ -8,25 +8,68 @@ import { cn } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
 function Upload() {
   const navigate = useNavigate();
-  const { setMeeting, setUploadedFile, uploadMethod, setUploadMethod, uploadedFile } = useMeetingStore();
+  const { createMeeting, loading } = useMeetingStore();
   const [title, setTitle] = useState("Q4 Planning - Engineering");
   const [date, setDate] = useState("2024-03-15");
   const [time, setTime] = useState("14:30");
   const [duration, setDuration] = useState("45m");
   const [isDragging, setIsDragging] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [uploadMethod, setUploadMethod] = useState("transcript");
+  const [submitError, setSubmitError] = useState(null);
   const handleDrop = useCallback((e) => {
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files[0];
     if (file) setUploadedFile(file);
-  }, [setUploadedFile]);
+  }, []);
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (file) setUploadedFile(file);
   };
-  const handleSubmit = () => {
-    setMeeting({ title, date, time, duration });
-    navigate(ROUTES.PROCESSING);
+  const handleSubmit = async () => {
+    try {
+      setSubmitError(null);
+
+      let sourceUrl = "";
+
+      if (uploadMethod === "transcript") {
+        // Require transcript text either from uploaded file
+        if (uploadedFile) {
+          // Read file contents as text
+          try {
+            sourceUrl = await uploadedFile.text();
+          } catch (readErr) {
+            console.error("Failed to read transcript file:", readErr);
+            setSubmitError("Failed to read transcript file");
+            return;
+          }
+        } else {
+          setSubmitError("Please provide a transcript file before submitting.");
+          return;
+        }
+      } else {
+        // For audio uploads, send filename as sourceUrl (backend handles audio processing)
+        if (uploadedFile) {
+          sourceUrl = uploadedFile.name;
+        } else {
+          setSubmitError("Please provide an audio file before submitting.");
+          return;
+        }
+      }
+
+      await createMeeting({
+        workspaceId: "demo-workspace",
+        title: "Uploaded Meeting",
+        sourceType: "TRANSCRIPT",
+        sourceUrl,
+      });
+
+      navigate(ROUTES.PROCESSING);
+    } catch (err) {
+      console.error("Upload failed:", err);
+      setSubmitError(err.message || "Upload failed");
+    }
   };
   return <div className="max-w-2xl mx-auto space-y-8 animate-fade-in"><div><h1 className="text-3xl font-semibold">Upload Meeting</h1><p className="text-muted-foreground mt-1">Add your meeting transcript or audio for AI processing</p></div>{
     /* Meeting Details */
@@ -51,8 +94,8 @@ function Upload() {
   >{uploadedFile ? <div className="flex items-center justify-center gap-3"><FileText className="h-8 w-8 text-success" /><div className="text-left"><p className="font-medium">{uploadedFile.name}</p><p className="text-sm text-muted-foreground">{(uploadedFile.size / 1024).toFixed(1)} KB</p></div><Button variant="ghost" size="icon-sm" onClick={() => setUploadedFile(null)}><X className="h-4 w-4" /></Button></div> : <div className="space-y-4"><UploadIcon className="h-10 w-10 mx-auto text-muted-foreground" /><div><p className="text-foreground">Drag & drop {uploadMethod} file here</p><p className="text-sm text-muted-foreground">or click to browse</p></div><input type="file" className="hidden" id="file-upload" onChange={handleFileSelect} accept={uploadMethod === "transcript" ? ".txt,.docx,.md" : ".mp3,.m4a,.wav"} /><label htmlFor="file-upload"><Button variant="outline" asChild><span>Browse Files</span></Button></label><p className="text-xs text-muted-foreground">
               Supports: {uploadMethod === "transcript" ? ".txt, .docx, .md (Max 50MB)" : ".mp3, .m4a, .wav (Max 100MB)"}</p></div>}</div>{
     /* Destination */
-  }<div className="space-y-4"><h2 className="text-lg font-medium">Destination</h2><div className="grid grid-cols-2 gap-4"><div className="space-y-2"><label className="text-sm font-medium">JIRA Project</label><Button variant="outline" className="w-full justify-between">ENG - Engineering <ChevronDown className="h-4 w-4" /></Button></div><div className="space-y-2"><label className="text-sm font-medium">Calendar</label><Button variant="outline" className="w-full justify-between">Team Calendar <ChevronDown className="h-4 w-4" /></Button></div></div></div><Button size="xl" className="w-full" onClick={handleSubmit}>
-        Start Processing
+  }<div className="space-y-4"><h2 className="text-lg font-medium">Destination</h2><div className="grid grid-cols-2 gap-4"><div className="space-y-2"><label className="text-sm font-medium">JIRA Project</label><Button variant="outline" className="w-full justify-between">ENG - Engineering <ChevronDown className="h-4 w-4" /></Button></div><div className="space-y-2"><label className="text-sm font-medium">Calendar</label><Button variant="outline" className="w-full justify-between">Team Calendar <ChevronDown className="h-4 w-4" /></Button></div></div></div>{submitError && <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg"><p className="text-sm text-destructive font-medium">{submitError}</p></div>}<Button size="xl" className="w-full" onClick={handleSubmit} disabled={loading}>
+        {loading ? "Processing..." : "Start Processing"}
       </Button></div>;
 }
 export {

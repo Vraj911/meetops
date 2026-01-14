@@ -1,4 +1,8 @@
-const { User, Workspace, Meeting, Review, AiOutput } = require('../config/mongoose');
+const User = require('../models/User');
+const Workspace = require('../models/Workspace');
+const Meeting = require('../models/Meeting');
+const Review = require('../models/Review');
+const AiOutput = require('../models/AiOutput');
 const { jiraClient } = require('../config/jira');
 const calendarService = require('../services/calendar.service');
 const axios = require('axios');

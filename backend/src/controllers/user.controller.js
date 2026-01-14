@@ -1,4 +1,6 @@
-const { User, Workspace, Meeting } = require("../config/mongoose");
+const User = require("../models/User");
+const Workspace = require("../models/Workspace");
+const Meeting = require("../models/Meeting");
 const mongoose = require("mongoose");
 
 // Get all users
